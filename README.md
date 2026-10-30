@@ -11,6 +11,20 @@ dataset	input	mode	annotations	split_by
 own	/absolute/path/to/own/raw_feature_bc_matrix	gex		cell_type
 GSE156441	/absolute/path/to/GSE156441/sc_analysis_combined/analysis.h5ad	existing		cell_type
 reviewed	/absolute/path/to/reviewed/analysis.h5ad	existing	/absolute/path/to/cell_types.tsv	cell_type
+=======
+Do **not** use an analyzed H5AD as a `gex` input if you want to retain its original clustering: use `existing`. Set `mode=gex` if you explicitly want to recompute it.
+
+## Commands
+
+```bash
+# Local, using installed executable:
+nextflow run . -profile local -resume --sc_analyse /path/to/sc-analyse --samples config/datasets.tsv --outdir /path/to/mimir_results
+
+# Apptainer, using published Lumrik image containing new annotation/split commands:
+nextflow run . -profile apptainer -resume --samples config/datasets.tsv --outdir /path/to/mimir_results --lumrik_image ghcr.io/stela2502/lumrik:v0.9.2
+
+# After reviewing the AI-ready package and filling annotations column in datasets.tsv:
+nextflow run . -profile apptainer -resume --samples config/datasets.tsv --outdir /path/to/mimir_results --run_annotate true --run_split true
 ```
 
 Each row is one input dataset:
