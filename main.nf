@@ -1,0 +1,115 @@
+nextflow.enable.dsl = 2
+
+process GEX {
+    tag "$id"
+    cpus 8
+    memory '48 GB'
+    publishDir "${params.outdir}/${id}/gex", mode: 'copy', overwrite: false, failOnError: true
+    input:
+    tuple val(id), val(data), val(labels), val(split_by)
+    output:
+    tuple val(id), path('analysis'), val(labels), val(split_by)
+    script:
+    """
+    set -euo pipefail
+    ${params.sc_analyse} gex \
+      --data '${data}' \
+      --sample-names '${id}' \
+      --out analysis \
+      --min-umi-count ${params.min_umi_count} \
+      --variable-genes ${params.variable_genes} \
+      --pca-components ${params.pca_components} \
+      --merge-pearson ${params.merge_pearson}
+    test -s analysis/analysis.h5ad || { echo 'ERROR: GEX did not create analysis.h5ad' >&2; exit 1; }
+    """
+}
+process REUSE {
+    tag "$id"
+    input:
+    tuple val(id), val(data), val(labels), val(split_by)
+    output:
+    tuple val(id), path('analysis'), val(labels), val(split_by)
+    script:
+    """
+    set -euo pipefail
+    test -s '${data}' || { echo 'ERROR: missing H5AD: ${data}' >&2; exit 1; }
+    mkdir analysis
+    ln -s '${data}' analysis/analysis.h5ad
+    """
+}
+process ANNOTATE {
+    tag "$id"
+    publishDir "${params.outdir}/${id}/annotated", mode: 'copy', overwrite: false, failOnError: true
+    input:
+    tuple val(id), path(analysis), val(labels), val(split_by)
+    output:
+    tuple val(id), path('annotated.h5ad'), val(split_by)
+    script:
+    """
+    set -euo pipefail
+    test -s '${labels}' || { echo 'ERROR: annotation TSV missing: ${labels}' >&2; exit 1; }
+    cp -L analysis/analysis.h5ad annotated.h5ad
+    ${params.sc_analyse} annotate --data annotated.h5ad --annotations '${labels}'
+    """
+}
+process SPLIT {
+    tag "$id"
+    publishDir "${params.outdir}/${id}/split", mode: 'copy', overwrite: false, failOnError: true
+    input:
+    tuple val(id), path(h5ad), val(split_by)
+    output:
+    tuple val(id), path('split')
+    script:
+    """
+    set -euo pipefail
+    ${params.sc_analyse} split --data '${h5ad}' --by '${split_by}' --out split
+    """
+}
+workflow {
+    def rows = Channel.fromPath(params.samples, checkIfExists: true)
+        .splitCsv(header: true, sep: '\t')
+        .map { row ->
+            def id = row.dataset?.trim()
+            def data = row.input?.trim()
+            def mode = row.mode?.trim()?.toLowerCase()
+            def labels = row.annotations?.trim() ?: ''
+            def by = row.split_by?.trim() ?: 'cell_type'
+            if (!(id ==~ /[A-Za-z0-9_-]+/)) error "Invalid dataset name: ${id}"
+            if (!(mode in ['gex','existing'])) error "Invalid mode for ${id}: ${mode}"
+            if (!data) error "Missing input for ${id}"
+            tuple(id, data, mode, labels, by)
+        }
+    def gex_rows = rows.filter { id, data, mode, labels, by -> mode == 'gex' }
+                        .map { id, data, mode, labels, by -> tuple(id,data,labels,by) }
+    def existing_rows = rows.filter { id, data, mode, labels, by -> mode == 'existing' }
+                             .map { id, data, mode, labels, by -> tuple(id,data,labels,by) }
+    def computed = GEX(gex_rows)
+    def reused = REUSE(existing_rows)
+    def analyses = computed.mix(reused)
+    if (params.run_annotate) {
+        def eligible = analyses.filter { id, analysis, labels, by -> labels }
+        def annotated = ANNOTATE(eligible)
+        if (params.run_split) SPLIT(annotated.map { id, h5ad, by -> tuple(id,h5ad,by) })
+    } else if (params.run_split) {
+        log.warn 'Splitting requires reviewed annotations; run with --run_annotate true'
+        error 'Cannot split without --run_annotate true'
+    }
+}
+
+// Read-only validation. This entry does not execute GEX or create analysis outputs.
+workflow PREFLIGHT {
+    def command = [
+        'python3', "${projectDir}/bin/preflight.py",
+        '--samples', params.samples.toString(),
+        '--outdir', params.outdir.toString(),
+        '--sc-analyse', params.sc_analyse.toString(),
+        '--image', params.lumrik_image.toString()
+    ]
+    // This runs on the Nextflow launch host, not in a container.
+    // Supply --check-runtime if you want to check local binaries / Apptainer presence.
+    if (params.preflight_check_runtime) command.add('--check-runtime')
+    command.addAll(['--profile', params.preflight_profile.toString()])
+    // ProcessBuilder requires java.lang.String elements, not Groovy GString values.
+    def proc = new ProcessBuilder(command.collect { it.toString() }).inheritIO().start()
+    if (proc.waitFor() != 0) error 'Mimir preflight failed; no analysis launched.'
+}

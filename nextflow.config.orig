@@ -1,0 +1,24 @@
+process {
+    executor = 'local'
+    errorStrategy = 'terminate'
+    maxForks = 1
+    shell = ['/bin/bash', '-ue']
+}
+profiles {
+    local {
+        process.container = null
+    }
+    apptainer {
+        apptainer.enabled = true
+        apptainer.autoMounts = true
+        process.container = params.lumrik_image
+    }
+    slurm {
+        process.executor = 'slurm'
+        apptainer.enabled = true
+        apptainer.autoMounts = true
+        process.container = params.lumrik_image
+    }
+}
+params.preflight_check_runtime = true
+params.preflight_profile = 'local'

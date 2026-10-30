@@ -1,0 +1,4 @@
+dataset	input	mode	annotations	split_by
+own	/home/med-sal/git_Projects/mimir/tests/fixtures/own/raw_feature_bc_matrix	gex		cell_type
+ext	/home/med-sal/git_Projects/mimir/tests/fixtures/ext/raw_feature_bc_matrix	gex		cell_type
+gse156441	/home/med-sal/git_Projects/mimir/tests/fixtures/gse156441/analysis.h5ad	existing		cell_type

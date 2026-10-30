@@ -1,0 +1,4 @@
+dataset	input	mode	annotations	split_by
+own	/ABSOLUTE/PATH/TO/OWN/raw_feature_bc_matrix	gex		cell_type
+ext	/ABSOLUTE/PATH/TO/EXT/MEX	gex		cell_type
+gse156441	/ABSOLUTE/PATH/TO/GSE156441/sc_analysis_combined/analysis.h5ad	existing		cell_type
