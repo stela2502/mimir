@@ -11,7 +11,7 @@ Edit `config/datasets.tsv` with **absolute paths**. Columns:
 - `annotations`: optional reviewed TSV, one row per cluster (required for annotation)
 - `split_by`: `obs` column to split by (default `cell_type`)
 
-Do **not** add a GSE156441 combined H5AD as a `gex` input if you want to retain its original clustering: use `existing`. Set `mode=gex` if you explicitly want to recompute it.
+Do **not** use an analyzed H5AD as a `gex` input if you want to retain its original clustering: use `existing`. Set `mode=gex` if you explicitly want to recompute it.
 
 ## Commands
 
